@@ -30,7 +30,6 @@ const inputs = {
   'major-label': 'major',
   'minor-label': 'minor',
   'patch-label': 'patch',
-  'skip-label': 'skip-release',
   'commit-user-name': 'Release Bot',
   'commit-user-email': 'bot@example.com'
 }
@@ -413,5 +412,19 @@ describe('run', () => {
 
     expect(core.setFailed).toHaveBeenCalledWith('Push rejected: stale info')
     expect(github.createRelease).not.toHaveBeenCalled()
+  })
+
+  it('fails before any change when the pull request has two release labels', async () => {
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'major' }, { name: 'patch' }]
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'The pull request has more than one release label: major, patch. Use one release label.'
+    )
+    expect(fs.existsSync(path.join(directory, 'CHANGELOG.md'))).toBe(false)
+    expect(git.commitFiles).not.toHaveBeenCalled()
   })
 })

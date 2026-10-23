@@ -4,13 +4,14 @@ import { currentVersion, nextVersion } from '../src/core/version.js'
 const names = {
   major: 'major',
   minor: 'minor',
-  patch: 'patch',
-  skip: 'skip-release'
+  patch: 'patch'
 }
-test('the highest release label wins', () =>
-  expect(releaseLevel(['patch', 'minor'], names)).toBe('minor'))
-test('skip-release beats a release label', () =>
-  expect(releaseLevel(['major', 'skip-release'], names)).toBeNull())
+test('one release label sets the level', () =>
+  expect(releaseLevel(['docs', 'minor'], names)).toBe('minor'))
+test('two release labels fail', () =>
+  expect(() => releaseLevel(['patch', 'minor'], names)).toThrow(
+    'The pull request has more than one release label: minor, patch. Use one release label.'
+  ))
 test('no release label means no release', () =>
   expect(releaseLevel(['docs'], names)).toBeNull())
 test('custom label names', () =>

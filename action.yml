@@ -34,11 +34,6 @@ inputs:
   patch-label:
     description: The pull request label that releases a patch version.
     default: patch
-  skip-label:
-    description:
-      The pull request label that stops a release. The entries stay in
-      Unreleased.
-    default: skip-release
   commit-user-name:
     description: The author name for the changelog commit.
     default: github-actions[bot]

@@ -43,8 +43,7 @@ export async function run() {
       {
         major: core.getInput('major-label'),
         minor: core.getInput('minor-label'),
-        patch: core.getInput('patch-label'),
-        skip: core.getInput('skip-label')
+        patch: core.getInput('patch-label')
       }
     )
     const changelogPath = core.getInput('changelog-path')
