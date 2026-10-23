@@ -6,273 +6,181 @@
 [![CodeQL](https://github.com/waywho/pr-to-release/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/waywho/pr-to-release/actions/workflows/codeql-analysis.yml)
 [![Coverage](./badges/coverage.svg)](./badges/coverage.svg)
 
-Use this template to bootstrap the creation of a JavaScript action. :rocket:
+This action writes the description of a merged pull request into a
+[Keep a Changelog](https://keepachangelog.com) `CHANGELOG.md`. A release label
+on the pull request also releases a new version.
 
-This template includes compilation support, tests, a validation workflow,
-publishing, and versioning guidance.
+## What it does
 
-If you are new, there's also a simpler introduction in the
-[Hello world JavaScript action repository](https://github.com/actions/hello-world-javascript-action).
+When a pull request merges, the action reads the description and the labels.
 
-## Create Your Own Action
+Without a release label:
 
-To create your own action, you can use this repository as a template! Just
-follow the below instructions:
+1. The action adds the entries under `## [Unreleased]`.
+1. The action skips an entry that is already there.
+1. The action commits `Update the changelog for #<number>` and pushes.
 
-1. Click the **Use this template** button at the top of the repository
-1. Select **Create a new repository**
-1. Select an owner and name for your new repository
-1. Click **Create repository**
-1. Clone your new repository
+With a release label:
 
-> [!IMPORTANT]
->
-> Make sure to remove or update the [`CODEOWNERS`](./CODEOWNERS) file! For
-> details on how to use this file, see
-> [About code owners](https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners).
+1. The action finds the current version. This is the highest tag
+   `<prefix>X.Y.Z`. It is `0.0.0` if no tag exists.
+1. The action runs `version-command`, if you set it.
+1. The action checks that the changed files contain the next version. If not, it
+   stops before any commit.
+1. The action moves `[Unreleased]` and the entries of the pull request into
+   `## [<next>] - <YYYY-MM-DD>`. The date is in UTC.
+1. The action updates the comparison links at the bottom of the file.
+1. The action commits `Release v<next>`, creates the tag and pushes.
+1. The action creates a GitHub Release. The body is the new changelog section.
 
-## Initial Setup
+A rejected push fails the action. The action then creates no release.
 
-After you've cloned the repository to your local machine or codespace, you'll
-need to perform some initial setup steps before you can develop your action.
+If `CHANGELOG.md` does not exist, the action creates it with the Keep a
+Changelog header.
 
-> [!NOTE]
->
-> You'll need to have a reasonably modern version of
-> [Node.js](https://nodejs.org) handy (20.x or later should work!). If you are
-> using a version manager like [`nodenv`](https://github.com/nodenv/nodenv) or
-> [`fnm`](https://github.com/Schniz/fnm), this template has a `.node-version`
-> file at the root of the repository that can be used to automatically switch to
-> the correct version when you `cd` into the repository. Additionally, this
-> `.node-version` file is used by GitHub Actions in any `actions/setup-node`
-> actions.
+## Labels
 
-1. :hammer_and_wrench: Install the dependencies
+| Label          | Effect                                          |
+| -------------- | ----------------------------------------------- |
+| `major`        | Releases the next major version right away.     |
+| `minor`        | Releases the next minor version right away.     |
+| `patch`        | Releases the next patch version right away.     |
+| `skip-release` | Adds the entries to `[Unreleased]`. No release. |
+| No label       | Adds the entries to `[Unreleased]`. No release. |
 
-   ```bash
-   npm install
-   ```
+- If a pull request has several release labels, the highest one wins.
+- `skip-release` wins over a release label.
+- You can change each label name with an input.
 
-1. :building_construction: Package the JavaScript for distribution
+## How a description becomes entries
 
-   ```bash
-   npm run bundle
-   ```
+The action reads these six headings in the pull request description:
 
-1. :white_check_mark: Run the tests
+- `### Added`
+- `### Changed`
+- `### Deprecated`
+- `### Removed`
+- `### Fixed`
+- `### Security`
 
-   ```bash
-   $ npm test
+Each `- ` line with text under a heading is one entry. A section ends at the
+next `##` or `###` heading.
 
-   PASS  ./index.test.js
-     ✓ throws invalid number (3ms)
-     ✓ wait 500 ms (504ms)
-     ✓ test runs (95ms)
+If no heading has an entry, the pull request title becomes one entry. The first
+word of the title selects the section. Letter case does not matter.
 
-   ...
-   ```
+| First word of the title                          | Section      |
+| ------------------------------------------------ | ------------ |
+| `Add`, `Adds`, `Added`                           | `Added`      |
+| `Fix`, `Fixes`, `Fixed`                          | `Fixed`      |
+| `Remove`, `Removes`, `Removed`, `Delete`, `Drop` | `Removed`    |
+| `Deprecate`, `Deprecates`, `Deprecated`          | `Deprecated` |
+| `Security`                                       | `Security`   |
+| Any other word                                   | `Changed`    |
 
-## Update the Action Metadata
+## Setup
 
-The [`action.yml`](action.yml) file defines metadata about your action, such as
-input(s) and output(s). For details about this file, see
-[Metadata syntax for GitHub Actions](https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions).
-
-When you copy this repository, update `action.yml` with the name, description,
-inputs, and outputs for your action.
-
-## Update the Action Code
-
-The [`src/`](./src/) directory is the heart of your action! This contains the
-source code that will be run when your action is invoked. You can replace the
-contents of this directory with your own code.
-
-There are a few things to keep in mind when writing your action code:
-
-- Most GitHub Actions toolkit and CI/CD operations are processed asynchronously.
-  In `main.js`, you will see that the action is run in an `async` function.
-
-  ```javascript
-  const core = require('@actions/core')
-  //...
-
-  async function run() {
-    try {
-      //...
-    } catch (error) {
-      core.setFailed(error.message)
-    }
-  }
-  ```
-
-  For more information about the GitHub Actions toolkit, see the
-  [documentation](https://github.com/actions/toolkit/blob/main/README.md).
-
-So, what are you waiting for? Go ahead and start customizing your action!
-
-1. Create a new branch
+1. Tag the current version once. This makes the tag and the version file agree.
 
    ```bash
-   git checkout -b releases/v1
+   git tag v0.1.0
+   git push origin v0.1.0
    ```
 
-1. Replace the contents of `src/` with your action code
-1. Add tests to `__tests__/` for your source code
-1. Format, test, and build the action
+1. Copy [`examples/pr-to-release.yml`](examples/pr-to-release.yml) to
+   `.github/workflows/pr-to-release.yml`.
+1. Copy [`examples/pull_request_template.md`](examples/pull_request_template.md)
+   to `.github/pull_request_template.md`.
+1. Create the labels `major`, `minor`, `patch` and `skip-release` in your
+   repository.
+1. If your project has a version file, set `version-command`. See the examples
+   below.
 
-   ```bash
-   npm run all
-   ```
+## Inputs
 
-   > This step is important! It will run [`rollup`](https://rollupjs.org/) to
-   > build the final JavaScript action code with all dependencies included. If
-   > you do not run this step, your action will not work correctly when it is
-   > used in a workflow.
+| Input               | Default                                                 | Description                                                                  |
+| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `github-token`      | `${{ github.token }}`                                   | The token that reads pull requests and creates releases.                     |
+| `changelog-path`    | `CHANGELOG.md`                                          | The path of the changelog file.                                              |
+| `version-command`   | empty                                                   | A command that the action runs with `bash -c` before the release commit.     |
+| `tag-prefix`        | `v`                                                     | The text that starts every release tag.                                      |
+| `major-label`       | `major`                                                 | The pull request label that releases a major version.                        |
+| `minor-label`       | `minor`                                                 | The pull request label that releases a minor version.                        |
+| `patch-label`       | `patch`                                                 | The pull request label that releases a patch version.                        |
+| `skip-label`        | `skip-release`                                          | The pull request label that stops a release. The entries stay in Unreleased. |
+| `commit-user-name`  | `github-actions[bot]`                                   | The author name for the changelog commit.                                    |
+| `commit-user-email` | `41898282+github-actions[bot]@users.noreply.github.com` | The author email for the changelog commit.                                   |
 
-1. (Optional) Test your action locally
+## Outputs
 
-   The [`@github/local-action`](https://github.com/github/local-action) utility
-   can be used to test your action locally. It is a simple command-line tool
-   that "stubs" (or simulates) the GitHub Actions Toolkit. This way, you can run
-   your JavaScript action locally without having to commit and push your changes
-   to a repository.
+| Output        | Description                                  |
+| ------------- | -------------------------------------------- |
+| `released`    | Is `true` when the action created a release. |
+| `version`     | The version of the release.                  |
+| `tag`         | The tag of the release.                      |
+| `release-url` | The URL of the GitHub Release.               |
 
-   The `local-action` utility can be run in the following ways:
-   - Visual Studio Code Debugger
+## Version command
 
-     Make sure to review and, if needed, update
-     [`.vscode/launch.json`](./.vscode/launch.json)
+The action runs `version-command` with `bash -c` before the release commit. The
+command receives these environment variables:
 
-   - Terminal/Command Prompt
+- `RELEASE_LEVEL` is `major`, `minor` or `patch`.
+- `NEXT_VERSION` is the version to release.
+- `CURRENT_VERSION` is the version of the highest tag.
 
-     ```bash
-     # npx @github/local action <action-yaml-path> <entrypoint> <dotenv-file>
-     npx @github/local-action . src/main.js .env
-     ```
+A non-zero exit code stops the action. The files that the command changes must
+contain `NEXT_VERSION`. If they do not, the action stops before any commit.
 
-   You can provide a `.env` file to the `local-action` CLI to set environment
-   variables used by the GitHub Actions Toolkit. For example, setting inputs and
-   event payload data used by your action. For more information, see the example
-   file, [`.env.example`](./.env.example), and the
-   [GitHub Actions Documentation](https://docs.github.com/en/actions/learn-github-actions/variables#default-environment-variables).
+Ruby, with the `bump` gem:
 
-1. Commit your changes
+```yaml
+- uses: ruby/setup-ruby@v1
+  with:
+    bundler-cache: true
+- uses: waywho/pr-to-release@v1
+  with:
+    version-command: bundle exec bump $RELEASE_LEVEL --no-commit
+```
 
-   ```bash
-   git add .
-   git commit -m "My first action is ready!"
-   ```
+npm:
 
-1. Push them to your repository
+```yaml
+- uses: waywho/pr-to-release@v1
+  with:
+    version-command: npm version $NEXT_VERSION --no-git-tag-version
+```
 
-   ```bash
-   git push -u origin releases/v1
-   ```
+## Tokens
 
-1. Create a pull request and get feedback on your action
-1. Merge the pull request into the `main` branch
+The default `GITHUB_TOKEN` has two limits:
 
-Your action is now published! :rocket:
+- It cannot push to a protected branch.
+- A push with this token does not start other workflows. CI does not run on the
+  release commit.
 
-For information about versioning your action, see
-[Versioning](https://github.com/actions/toolkit/blob/main/docs/action-versioning.md)
-in the GitHub Actions toolkit.
-
-## Validate the Action
-
-You can now validate the action by referencing it in a workflow file. For
-example, [`ci.yml`](./.github/workflows/ci.yml) demonstrates how to reference an
-action in the same repository.
+To remove these limits, use a GitHub App token or a personal access token. Pass
+the token to `actions/checkout` and to the action.
 
 ```yaml
 steps:
-  - name: Checkout
-    id: checkout
-    uses: actions/checkout@v4
-
-  - name: Test Local Action
-    id: test-action
-    uses: ./
+  - uses: actions/create-github-app-token@v2
+    id: app-token
     with:
-      milliseconds: 1000
-
-  - name: Print Output
-    id: output
-    run: echo "${{ steps.test-action.outputs.time }}"
-```
-
-For example workflow runs, check out the
-[Actions tab](https://github.com/actions/javascript-action/actions)! :rocket:
-
-## Usage
-
-After testing, you can create version tag(s) that developers can use to
-reference different stable versions of your action. For more information, see
-[Versioning](https://github.com/actions/toolkit/blob/main/docs/action-versioning.md)
-in the GitHub Actions toolkit.
-
-To include the action in a workflow in another repository, you can use the
-`uses` syntax with the `@` symbol to reference a specific branch, tag, or commit
-hash.
-
-```yaml
-steps:
-  - name: Checkout
-    id: checkout
-    uses: actions/checkout@v4
-
-  - name: Test Local Action
-    id: test-action
-    uses: actions/javascript-action@v1 # Commit with the `v1` tag
+      app-id: ${{ vars.APP_ID }}
+      private-key: ${{ secrets.APP_PRIVATE_KEY }}
+  - uses: actions/checkout@v5
     with:
-      milliseconds: 1000
-
-  - name: Print Output
-    id: output
-    run: echo "${{ steps.test-action.outputs.time }}"
+      fetch-depth: 0
+      token: ${{ steps.app-token.outputs.token }}
+  - uses: waywho/pr-to-release@v1
+    with:
+      github-token: ${{ steps.app-token.outputs.token }}
 ```
 
-## Dependency License Management
+## Limits
 
-This template includes a GitHub Actions workflow,
-[`licensed.yml`](./.github/workflows/licensed.yml), that uses
-[Licensed](https://github.com/licensee/licensed) to check for dependencies with
-missing or non-compliant licenses. This workflow is initially disabled. To
-enable the workflow, follow the below steps.
-
-1. Open [`licensed.yml`](./.github/workflows/licensed.yml)
-1. Uncomment the following lines:
-
-   ```yaml
-   # pull_request:
-   #   branches:
-   #     - main
-   # push:
-   #   branches:
-   #     - main
-   ```
-
-1. Save and commit the changes
-
-Once complete, this workflow will run any time a pull request is created or
-changes pushed directly to `main`. If the workflow detects any dependencies with
-missing or non-compliant licenses, it will fail the workflow and provide details
-on the issue(s) found.
-
-### Updating Licenses
-
-Whenever you install or update dependencies, you can use the Licensed CLI to
-update the licenses database. To install Licensed, see the project's
-[Readme](https://github.com/licensee/licensed?tab=readme-ov-file#installation).
-
-To update the cached licenses, run the following command:
-
-```bash
-licensed cache
-```
-
-To check the status of cached licenses, run the following command:
-
-```bash
-licensed status
-```
+- The action does not support pull requests from forks. The token is read-only
+  for them. The action does not use `pull_request_target`, because it runs with
+  write access on fork code.
+- The action does not support pre-release versions.

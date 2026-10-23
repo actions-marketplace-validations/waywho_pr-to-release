@@ -17,8 +17,10 @@ inputs:
     default: CHANGELOG.md
   version-command:
     description:
-      An optional shell command that the action runs when it creates a release.
-      Leave it empty to run no command.
+      An optional command that the action runs with bash before the release
+      commit. The command receives RELEASE_LEVEL, NEXT_VERSION and
+      CURRENT_VERSION. It must write NEXT_VERSION into a file. A non-zero exit
+      code stops the action.
     default: ''
   tag-prefix:
     description: The text that starts every release tag.
@@ -33,7 +35,9 @@ inputs:
     description: The pull request label that releases a patch version.
     default: patch
   skip-label:
-    description: The pull request label that skips the changelog entry.
+    description:
+      The pull request label that stops a release. The entries stay in
+      Unreleased.
     default: skip-release
   commit-user-name:
     description: The author name for the changelog commit.
