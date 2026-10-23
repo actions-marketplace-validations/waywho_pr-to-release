@@ -1,4 +1,4 @@
-import { SECTIONS, emptyEntries } from './sections.js'
+import { SECTIONS } from './sections.js'
 
 export const HEADER = `# Changelog
 
@@ -10,25 +10,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 const UNRELEASED_HEADING = '## [Unreleased]\n'
 
-const parseEntries = (body) => {
-  const entries = emptyEntries()
-  let current = null
-  for (const line of body.split('\n')) {
-    if (line.startsWith('### ')) {
-      const heading = line.slice(4).trim()
-      current = SECTIONS.includes(heading) ? entries[heading] : null
-    } else if (line.startsWith('- ')) current?.push(line.slice(2))
+const afterLastContent = (lines, from, to) => {
+  for (let index = to - 1; index >= from; index--) {
+    if (lines[index].trim() !== '') return index + 1
   }
-  return entries
+  return from
 }
 
-const renderEntries = (entries) =>
-  SECTIONS.filter((section) => entries[section].length > 0)
-    .map(
-      (section) =>
-        `### ${section}\n${entries[section].map((entry) => `- ${entry}\n`).join('')}`
+const insertEntry = (lines, section, entry) => {
+  const heading = lines.indexOf(`### ${section}`)
+  if (heading === -1) {
+    const later = lines.findIndex((line) =>
+      SECTIONS.slice(SECTIONS.indexOf(section) + 1).some(
+        (name) => line === `### ${name}`
+      )
     )
-    .join('')
+    const at = later === -1 ? afterLastContent(lines, 0, lines.length) : later
+    lines.splice(at, 0, `### ${section}`, `- ${entry}`)
+    return
+  }
+  const next = lines.findIndex(
+    (line, index) => index > heading && line.startsWith('### ')
+  )
+  const sectionEnd = next === -1 ? lines.length : next
+  if (lines.slice(heading, sectionEnd).includes(`- ${entry}`)) return
+  lines.splice(
+    afterLastContent(lines, heading + 1, sectionEnd),
+    0,
+    `- ${entry}`
+  )
+}
 
 const locateUnreleased = (text) => {
   const start = text.indexOf(UNRELEASED_HEADING)
@@ -48,16 +59,13 @@ export const ensureChangelog = (text) => {
 
 export const addUnreleased = (text, entries) => {
   const { bodyStart, end } = locateUnreleased(text)
-  const merged = parseEntries(text.slice(bodyStart, end))
-  let changed = false
+  const lines = text.slice(bodyStart, end).split('\n')
+  lines.pop()
+  const before = lines.length
   for (const section of SECTIONS) {
-    for (const entry of entries[section]) {
-      if (merged[section].includes(entry)) continue
-      merged[section].push(entry)
-      changed = true
-    }
+    for (const entry of entries[section]) insertEntry(lines, section, entry)
   }
-  if (!changed) return text
-  const separator = end < text.length ? '\n' : ''
-  return `${text.slice(0, bodyStart)}${renderEntries(merged)}${separator}${text.slice(end)}`
+  if (lines.length === before) return text
+  if (end < text.length && lines.at(-1) !== '') lines.push('')
+  return `${text.slice(0, bodyStart)}${lines.join('\n')}\n${text.slice(end)}`
 }

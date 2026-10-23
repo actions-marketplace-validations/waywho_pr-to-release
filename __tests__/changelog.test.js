@@ -28,6 +28,14 @@ test('skips an entry that is already there', () => {
   const text = `${HEADER}\n## [Unreleased]\n### Fixed\n- Same\n`
   expect(addUnreleased(text, { ...emptyEntries(), Fixed: ['Same'] })).toBe(text)
 })
+test('keeps hand-written text in [Unreleased] byte for byte', () => {
+  const text = `${HEADER}\n## [Unreleased]\nIntro prose.\n### Added\n- Wrapped entry\n  continues here\n  - nested\n### Notes\n- Remember this\n\n## [1.0.0] - 2026-01-01\n`
+  expect(
+    addUnreleased(text, { ...emptyEntries(), Added: ['New'], Fixed: ['Fix'] })
+  ).toBe(
+    `${HEADER}\n## [Unreleased]\nIntro prose.\n### Added\n- Wrapped entry\n  continues here\n  - nested\n- New\n### Notes\n- Remember this\n### Fixed\n- Fix\n\n## [1.0.0] - 2026-01-01\n`
+  )
+})
 test('leaves the version sections untouched', () => {
   const text = `${HEADER}\n## [Unreleased]\n\n## [1.0.0] - 2026-01-01\n### Fixed\n- Same\n`
   expect(addUnreleased(text, { ...emptyEntries(), Fixed: ['Same'] })).toContain(
