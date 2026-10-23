@@ -72,8 +72,9 @@ The action reads these six headings in the pull request description:
 - `### Fixed`
 - `### Security`
 
-Each `- ` line with text under a heading is one entry. A section ends at the
-next `##` or `###` heading.
+Each line under a heading that starts with a dash and a space, and has text
+after them (`- Fixed the link`), is one entry. A section ends at the next `##`
+or `###` heading.
 
 If no heading has an entry, the pull request title becomes one entry. The first
 word of the title selects the section. Letter case does not matter.
@@ -181,7 +182,7 @@ steps:
     with:
       app-id: ${{ vars.APP_ID }}
       private-key: ${{ secrets.APP_PRIVATE_KEY }}
-  - uses: actions/checkout@v5
+  - uses: actions/checkout@v7
     with:
       fetch-depth: 0
       token: ${{ steps.app-token.outputs.token }}
@@ -195,4 +196,4 @@ steps:
 - The action does not support pull requests from forks. The token is read-only
   for them. The action does not use `pull_request_target`, because it runs with
   write access on fork code.
-- The action does not support pre-release versions.
+- The action does not support prerelease versions.
