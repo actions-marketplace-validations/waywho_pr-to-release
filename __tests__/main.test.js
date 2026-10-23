@@ -450,6 +450,7 @@ describe('run', () => {
     expect(core.setFailed).toHaveBeenCalledWith(
       'The pull request has more than one release label: major, patch. Use one release label.'
     )
+    expect(git.syncWithRemote).not.toHaveBeenCalled()
     expect(fs.existsSync(path.join(directory, 'CHANGELOG.md'))).toBe(false)
     expect(git.commitFiles).not.toHaveBeenCalled()
   })

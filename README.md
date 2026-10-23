@@ -18,9 +18,10 @@ flowchart TD
   labels{"Two or more release labels?"}
   block["Fail check-labels and block the merge"]
   merged["Pull request merges"]
-  entries["Read the entries from the description, or use the title"]
-  label{"Release label?"}
+  label{"How many release labels?"}
   conflict["Fail before any change"]
+  entries["Read the entries from the description, or use the title"]
+  level{"Release label?"}
   unreleased["Add the entries under Unreleased"]
   commit["Commit 'Update the changelog for #N' and push"]
   released{"Does the latest tag contain this pull request?"}
@@ -35,10 +36,11 @@ flowchart TD
 
   open --> labels
   labels -- yes --> block
-  labels -- no --> merged --> entries --> label
+  labels -- no --> merged --> label
   label -- "two or more" --> conflict
-  label -- none --> unreleased --> commit
-  label -- "major, minor or patch" --> released
+  label -- "none or one" --> entries --> level
+  level -- none --> unreleased --> commit
+  level -- "major, minor or patch" --> released
   released -- yes --> stop
   released -- no --> bump --> command --> check
   check -- no --> fail
@@ -108,9 +110,9 @@ The action reads these six headings in the pull request description:
 - `### Fixed`
 - `### Security`
 
-Each line under a heading that starts with a dash and a space, and has text
-after them (`- Fixed the link`), is one entry. A section ends at the next `##`
-or `###` heading.
+A line under one of these headings is one entry when it starts with a dash and a
+space and has text after them (`- Fixed the link`). A section ends at the next
+`##` or `###` heading.
 
 If no heading has an entry, the pull request title becomes one entry. The first
 word of the title selects the section. Letter case does not matter.
