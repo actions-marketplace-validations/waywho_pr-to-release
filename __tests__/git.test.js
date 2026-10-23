@@ -4,12 +4,13 @@ import os from 'node:os'
 import path from 'node:path'
 import {
   changedFiles,
-  commitAll,
+  commitFiles,
   diffContains,
   listTags,
   push,
   syncWithRemote,
-  tag
+  tag,
+  tagContains
 } from '../src/github/git.js'
 
 const identity = ['-c', 'user.name=Setup', '-c', 'user.email=setup@example.com']
@@ -75,19 +76,48 @@ test('changedFiles lists tracked changes and new files', async () => {
 test('diffContains is true when an added line has the text', async () => {
   fs.writeFileSync(path.join(work, 'version.rb'), "VERSION = '0.2.0'\n")
 
-  expect(await diffContains(work, '0.2.0')).toBe(true)
+  expect(await diffContains(work, '0.2.0', ['version.rb'])).toBe(true)
 })
 
 test('diffContains is false when the text is absent', async () => {
   fs.writeFileSync(path.join(work, 'version.rb'), "VERSION = '0.2.0'\n")
 
-  expect(await diffContains(work, '9.9.9')).toBe(false)
+  expect(await diffContains(work, '9.9.9', ['version.rb'])).toBe(false)
 })
 
 test('diffContains is true when a new untracked file has the text', async () => {
   fs.writeFileSync(path.join(work, 'new-version.txt'), '0.2.0\n')
 
-  expect(await diffContains(work, '0.2.0')).toBe(true)
+  expect(await diffContains(work, '0.2.0', ['new-version.txt'])).toBe(true)
+})
+
+test('diffContains ignores a matching line in a file outside the paths', async () => {
+  fs.writeFileSync(path.join(work, 'unrelated.txt'), '0.2.0\n')
+  fs.writeFileSync(path.join(work, 'version.rb'), "VERSION = '0.1.1'\n")
+
+  expect(await diffContains(work, '0.2.0', ['version.rb'])).toBe(false)
+})
+
+test('tagContains is true when the tag contains the commit', async () => {
+  const commit = git(work, 'rev-parse', 'HEAD')
+  git(work, ...identity, 'tag', 'v0.1.0')
+
+  expect(await tagContains(work, 'v0.1.0', commit)).toBe(true)
+})
+
+test('tagContains is false when the commit is newer than the tag', async () => {
+  git(work, ...identity, 'tag', 'v0.1.0')
+  commitFile(work, 'later.txt', 'later\n', 'Later commit')
+
+  expect(
+    await tagContains(work, 'v0.1.0', git(work, 'rev-parse', 'HEAD'))
+  ).toBe(false)
+})
+
+test('tagContains throws when the commit is unknown', async () => {
+  git(work, ...identity, 'tag', 'v0.1.0')
+
+  await expect(tagContains(work, 'v0.1.0', 'f'.repeat(40))).rejects.toThrow()
 })
 
 test('a rejected push leaves no tag on the remote', async () => {
@@ -95,7 +125,7 @@ test('a rejected push leaves no tag on the remote', async () => {
   commitFile(other, 'other.txt', 'hello\n', 'From other')
   git(other, 'push', 'origin', 'main')
   fs.writeFileSync(path.join(work, 'CHANGELOG.md'), '# Changelog\n')
-  await commitAll(work, 'Release 0.2.0', author)
+  await commitFiles(work, 'Release 0.2.0', ['CHANGELOG.md'], author)
   await tag(work, 'v0.2.0')
 
   await expect(push(work, 'main', 'v0.2.0')).rejects.toThrow(/^Push rejected:/)
@@ -105,13 +135,25 @@ test('a rejected push leaves no tag on the remote', async () => {
 test('diffContains ignores removed lines', async () => {
   fs.writeFileSync(path.join(work, 'version.rb'), "VERSION = '0.2.0'\n")
 
-  expect(await diffContains(work, '0.1.0')).toBe(false)
+  expect(await diffContains(work, '0.1.0', ['version.rb'])).toBe(false)
 })
 
-test('commitAll, tag and push put the commit and tag on the remote', async () => {
+test('commitFiles does not commit a file outside the paths', async () => {
+  fs.writeFileSync(path.join(work, 'CHANGELOG.md'), '# Changelog\n')
+  fs.writeFileSync(path.join(work, 'unrelated.txt'), 'gem\n')
+
+  await commitFiles(work, 'Update', ['CHANGELOG.md'], author)
+
+  expect(git(work, 'show', '--name-only', '--format=', 'HEAD')).toBe(
+    'CHANGELOG.md'
+  )
+  expect(git(work, 'status', '--short')).toBe('?? unrelated.txt')
+})
+
+test('commitFiles, tag and push put the commit and tag on the remote', async () => {
   fs.writeFileSync(path.join(work, 'CHANGELOG.md'), '# Changelog\n')
 
-  await commitAll(work, 'Release 0.2.0', author)
+  await commitFiles(work, 'Release 0.2.0', ['CHANGELOG.md'], author)
   await tag(work, 'v0.2.0')
   await push(work, 'main', 'v0.2.0')
 
@@ -125,7 +167,7 @@ test('push throws Push rejected when another clone pushed first', async () => {
   commitFile(other, 'other.txt', 'hello\n', 'From other')
   git(other, 'push', 'origin', 'main')
   fs.writeFileSync(path.join(work, 'CHANGELOG.md'), '# Changelog\n')
-  await commitAll(work, 'Release 0.2.0', author)
+  await commitFiles(work, 'Release 0.2.0', ['CHANGELOG.md'], author)
 
   await expect(push(work, 'main')).rejects.toThrow(/^Push rejected:/)
 })

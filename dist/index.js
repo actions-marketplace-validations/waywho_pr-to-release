@@ -61918,18 +61918,28 @@ const changedFiles = async (cwd) =>
     ).stdout
   );
 
-const diffContains = async (cwd, text) => {
-  await git(cwd, ['add', '-A']);
+const diffContains = async (cwd, text, paths) => {
+  await git(cwd, ['add', '--', ...paths]);
   return lines(
-    (await git(cwd, ['diff', '--cached', 'HEAD', '-U0'])).stdout
+    (await git(cwd, ['diff', '--cached', 'HEAD', '-U0', '--', ...paths])).stdout
   ).some(
     (line) =>
       line.startsWith('+') && !line.startsWith('+++') && line.includes(text)
   )
 };
 
-const commitAll = async (cwd, message, { name, email }) => {
-  await git(cwd, ['add', '-A']);
+const tagContains = async (cwd, tagName, commit) => {
+  const { exitCode, stderr } = await git(
+    cwd,
+    ['merge-base', '--is-ancestor', commit, tagName],
+    { ignoreReturnCode: true }
+  );
+  if (exitCode > 1) throw new Error(`git merge-base failed: ${stderr.trim()}`)
+  return exitCode === 0
+};
+
+const commitFiles = async (cwd, message, paths, { name, email }) => {
+  await git(cwd, ['add', '--', ...paths]);
   await git(cwd, [
     '-c',
     `user.name=${name}`,
@@ -61970,6 +61980,7 @@ async function run() {
       email: getInput('commit-user-email')
     };
     await syncWithRemote(cwd, branch);
+    const before = await changedFiles(cwd);
 
     const entries = entriesFor(pullRequest);
     const level = releaseLevel(
@@ -61981,18 +61992,27 @@ async function run() {
         skip: getInput('skip-label')
       }
     );
-    const changelogFile = path$1.join(cwd, getInput('changelog-path'));
-    const existing = fs$1.existsSync(changelogFile)
+    const changelogPath = getInput('changelog-path');
+    const changelogFile = path$1.join(cwd, changelogPath);
+    const original = fs$1.existsSync(changelogFile)
       ? fs$1.readFileSync(changelogFile, 'utf8')
       : null;
+    const crlf = original?.includes('\r\n') ?? false;
+    const existing = original?.replace(/\r\n/g, '\n') ?? null;
     const changelog = ensureChangelog(existing);
+    const writeChangelog = (text) => {
+      fs$1.mkdirSync(path$1.dirname(changelogFile), { recursive: true });
+      fs$1.writeFileSync(changelogFile, crlf ? text.replace(/\n/g, '\r\n') : text);
+    };
 
     if (!level) {
-      fs$1.writeFileSync(changelogFile, addUnreleased(changelog, entries));
-      if ((await changedFiles(cwd)).length > 0) {
-        await commitAll(
+      const text = addUnreleased(changelog, entries);
+      if (text !== existing) {
+        writeChangelog(text);
+        await commitFiles(
           cwd,
           `Update the changelog for #${pullRequest.number}`,
+          [changelogPath],
           author
         );
         await push(cwd, branch);
@@ -62003,8 +62023,20 @@ async function run() {
 
     const tagPrefix = getInput('tag-prefix');
     const current = currentVersion(await listTags(cwd), tagPrefix);
+    const currentTag = `${tagPrefix}${current}`;
+    if (
+      current !== '0.0.0' &&
+      (await tagContains(cwd, currentTag, pullRequest.merge_commit_sha))
+    ) {
+      info(
+        `Pull request #${pullRequest.number} is already in ${currentTag}. Nothing to do.`
+      );
+      setOutput('released', 'false');
+      return
+    }
     const next = nextVersion(current, level);
     const versionCommand = getInput('version-command');
+    let versionFiles = [];
     if (versionCommand) {
       const exitCode = await exec('bash', ['-c', versionCommand], {
         cwd,
@@ -62020,7 +62052,13 @@ async function run() {
         setFailed(`The version command failed with exit code ${exitCode}.`);
         return
       }
-      if (!(await diffContains(cwd, next))) {
+      versionFiles = (await changedFiles(cwd)).filter(
+        (file) => !before.includes(file)
+      );
+      if (
+        versionFiles.length === 0 ||
+        !(await diffContains(cwd, next, versionFiles))
+      ) {
         setFailed(
           `The version command did not write ${next} into any file. Tag the current version before you adopt the action.`
         );
@@ -62036,9 +62074,14 @@ async function run() {
       repoUrl: payload.repository.html_url,
       tagPrefix
     });
-    fs$1.writeFileSync(changelogFile, text);
+    writeChangelog(text);
     const tagName = `${tagPrefix}${next}`;
-    await commitAll(cwd, `Release v${next}`, author);
+    await commitFiles(
+      cwd,
+      `Release ${tagName}`,
+      [changelogPath, ...versionFiles],
+      author
+    );
     await tag(cwd, tagName);
     await push(cwd, branch, tagName);
 

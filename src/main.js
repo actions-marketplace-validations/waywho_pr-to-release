@@ -9,12 +9,13 @@ import { entriesFor } from './core/pull-request.js'
 import { currentVersion, nextVersion } from './core/version.js'
 import {
   changedFiles,
-  commitAll,
+  commitFiles,
   diffContains,
   listTags,
   push,
   syncWithRemote,
-  tag
+  tag,
+  tagContains
 } from './github/git.js'
 
 export async function run() {
@@ -34,6 +35,7 @@ export async function run() {
       email: core.getInput('commit-user-email')
     }
     await syncWithRemote(cwd, branch)
+    const before = await changedFiles(cwd)
 
     const entries = entriesFor(pullRequest)
     const level = releaseLevel(
@@ -45,18 +47,27 @@ export async function run() {
         skip: core.getInput('skip-label')
       }
     )
-    const changelogFile = path.join(cwd, core.getInput('changelog-path'))
-    const existing = fs.existsSync(changelogFile)
+    const changelogPath = core.getInput('changelog-path')
+    const changelogFile = path.join(cwd, changelogPath)
+    const original = fs.existsSync(changelogFile)
       ? fs.readFileSync(changelogFile, 'utf8')
       : null
+    const crlf = original?.includes('\r\n') ?? false
+    const existing = original?.replace(/\r\n/g, '\n') ?? null
     const changelog = ensureChangelog(existing)
+    const writeChangelog = (text) => {
+      fs.mkdirSync(path.dirname(changelogFile), { recursive: true })
+      fs.writeFileSync(changelogFile, crlf ? text.replace(/\n/g, '\r\n') : text)
+    }
 
     if (!level) {
-      fs.writeFileSync(changelogFile, addUnreleased(changelog, entries))
-      if ((await changedFiles(cwd)).length > 0) {
-        await commitAll(
+      const text = addUnreleased(changelog, entries)
+      if (text !== existing) {
+        writeChangelog(text)
+        await commitFiles(
           cwd,
           `Update the changelog for #${pullRequest.number}`,
+          [changelogPath],
           author
         )
         await push(cwd, branch)
@@ -67,8 +78,20 @@ export async function run() {
 
     const tagPrefix = core.getInput('tag-prefix')
     const current = currentVersion(await listTags(cwd), tagPrefix)
+    const currentTag = `${tagPrefix}${current}`
+    if (
+      current !== '0.0.0' &&
+      (await tagContains(cwd, currentTag, pullRequest.merge_commit_sha))
+    ) {
+      core.info(
+        `Pull request #${pullRequest.number} is already in ${currentTag}. Nothing to do.`
+      )
+      core.setOutput('released', 'false')
+      return
+    }
     const next = nextVersion(current, level)
     const versionCommand = core.getInput('version-command')
+    let versionFiles = []
     if (versionCommand) {
       const exitCode = await exec('bash', ['-c', versionCommand], {
         cwd,
@@ -84,7 +107,13 @@ export async function run() {
         core.setFailed(`The version command failed with exit code ${exitCode}.`)
         return
       }
-      if (!(await diffContains(cwd, next))) {
+      versionFiles = (await changedFiles(cwd)).filter(
+        (file) => !before.includes(file)
+      )
+      if (
+        versionFiles.length === 0 ||
+        !(await diffContains(cwd, next, versionFiles))
+      ) {
         core.setFailed(
           `The version command did not write ${next} into any file. Tag the current version before you adopt the action.`
         )
@@ -100,9 +129,14 @@ export async function run() {
       repoUrl: payload.repository.html_url,
       tagPrefix
     })
-    fs.writeFileSync(changelogFile, text)
+    writeChangelog(text)
     const tagName = `${tagPrefix}${next}`
-    await commitAll(cwd, `Release v${next}`, author)
+    await commitFiles(
+      cwd,
+      `Release ${tagName}`,
+      [changelogPath, ...versionFiles],
+      author
+    )
     await tag(cwd, tagName)
     await push(cwd, branch, tagName)
 

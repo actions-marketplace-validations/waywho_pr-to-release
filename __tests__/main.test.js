@@ -10,7 +10,8 @@ const git = {
   listTags: jest.fn(),
   changedFiles: jest.fn(),
   diffContains: jest.fn(),
-  commitAll: jest.fn(),
+  commitFiles: jest.fn(),
+  tagContains: jest.fn(),
   tag: jest.fn(),
   push: jest.fn()
 }
@@ -108,9 +109,10 @@ describe('run', () => {
 
     expect(git.syncWithRemote).toHaveBeenCalledWith(directory, 'main')
     expect(readChangelog()).toContain('### Added\n- A new thing')
-    expect(git.commitAll).toHaveBeenCalledWith(
+    expect(git.commitFiles).toHaveBeenCalledWith(
       directory,
       'Update the changelog for #7',
+      ['CHANGELOG.md'],
       author
     )
     expect(git.push).toHaveBeenCalledWith(directory, 'main')
@@ -130,14 +132,49 @@ describe('run', () => {
     expect(readChangelog()).toContain('### Fixed\n- Fix the link')
   })
 
-  it('stops when nothing changed and there is no release label', async () => {
-    git.changedFiles.mockResolvedValue([])
+  it('stops when the changelog already has the entries and there is no release label', async () => {
+    await run()
+    git.commitFiles.mockClear()
+    git.push.mockClear()
 
     await run()
 
-    expect(git.commitAll).not.toHaveBeenCalled()
+    expect(git.commitFiles).not.toHaveBeenCalled()
     expect(git.push).not.toHaveBeenCalled()
-    expect(core.setOutput).toHaveBeenCalledWith('released', 'false')
+    expect(core.setOutput).toHaveBeenLastCalledWith('released', 'false')
+  })
+
+  it('creates the folder of the changelog when it is missing', async () => {
+    inputs['changelog-path'] = 'docs/CHANGELOG.md'
+
+    try {
+      await run()
+    } finally {
+      inputs['changelog-path'] = 'CHANGELOG.md'
+    }
+
+    expect(
+      fs.readFileSync(path.join(directory, 'docs/CHANGELOG.md'), 'utf8')
+    ).toContain('### Added\n- A new thing')
+    expect(git.commitFiles).toHaveBeenCalledWith(
+      directory,
+      'Update the changelog for #7',
+      ['docs/CHANGELOG.md'],
+      author
+    )
+  })
+
+  it('keeps CRLF line ends in the changelog', async () => {
+    fs.writeFileSync(
+      path.join(directory, 'CHANGELOG.md'),
+      '# Changelog\r\n\r\n## [Unreleased]\r\n'
+    )
+
+    await run()
+
+    const text = readChangelog()
+    expect(text).toContain('### Added\r\n- A new thing\r\n')
+    expect(text.replace(/\r\n/g, '')).not.toContain('\n')
   })
 
   it('cuts a release when the pull request has a release label', async () => {
@@ -146,6 +183,9 @@ describe('run', () => {
       labels: [{ name: 'minor' }]
     })
     git.listTags.mockResolvedValue(['v1.2.3'])
+    git.changedFiles
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(['version.txt'])
 
     try {
       await run()
@@ -154,11 +194,14 @@ describe('run', () => {
     }
 
     expect(fs.readFileSync('version.txt', 'utf8').trim()).toBe('1.3.0')
-    expect(git.diffContains).toHaveBeenCalledWith(directory, '1.3.0')
+    expect(git.diffContains).toHaveBeenCalledWith(directory, '1.3.0', [
+      'version.txt'
+    ])
     expect(readChangelog()).toContain('## [1.3.0] - ')
-    expect(git.commitAll).toHaveBeenCalledWith(
+    expect(git.commitFiles).toHaveBeenCalledWith(
       directory,
       'Release v1.3.0',
+      ['CHANGELOG.md', 'version.txt'],
       author
     )
     expect(git.tag).toHaveBeenCalledWith(directory, 'v1.3.0')
@@ -205,6 +248,118 @@ describe('run', () => {
 
     expect(git.diffContains).not.toHaveBeenCalled()
     expect(git.tag).toHaveBeenCalledWith(directory, 'v0.0.1')
+    expect(git.commitFiles).toHaveBeenCalledWith(
+      directory,
+      'Release v0.0.1',
+      ['CHANGELOG.md'],
+      author
+    )
+  })
+
+  it('names the release commit after the tag', async () => {
+    inputs['tag-prefix'] = 'rel-'
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'minor' }]
+    })
+    git.listTags.mockResolvedValue(['rel-1.2.3'])
+
+    try {
+      await run()
+    } finally {
+      inputs['tag-prefix'] = 'v'
+    }
+
+    expect(git.commitFiles).toHaveBeenCalledWith(
+      directory,
+      'Release rel-1.3.0',
+      ['CHANGELOG.md'],
+      author
+    )
+    expect(git.tag).toHaveBeenCalledWith(directory, 'rel-1.3.0')
+  })
+
+  it('does nothing when the current tag already contains the pull request', async () => {
+    inputs['version-command'] = 'echo $NEXT_VERSION > version.txt'
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'minor' }],
+      merge_commit_sha: 'abc123'
+    })
+    git.listTags.mockResolvedValue(['v1.2.3'])
+    git.tagContains.mockResolvedValue(true)
+
+    try {
+      await run()
+    } finally {
+      inputs['version-command'] = ''
+    }
+
+    expect(git.tagContains).toHaveBeenCalledWith(directory, 'v1.2.3', 'abc123')
+    expect(core.info).toHaveBeenCalledWith(
+      'Pull request #7 is already in v1.2.3. Nothing to do.'
+    )
+    expect(core.setOutput).toHaveBeenCalledWith('released', 'false')
+    expect(fs.existsSync('version.txt')).toBe(false)
+    expect(git.commitFiles).not.toHaveBeenCalled()
+    expect(git.tag).not.toHaveBeenCalled()
+    expect(github.createRelease).not.toHaveBeenCalled()
+  })
+
+  it('does not check for a tag when no tag exists', async () => {
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'patch' }]
+    })
+
+    await run()
+
+    expect(git.tagContains).not.toHaveBeenCalled()
+  })
+
+  it('neither commits nor counts a file that existed before the run', async () => {
+    inputs['version-command'] = 'echo $NEXT_VERSION > version.txt'
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'minor' }]
+    })
+    git.listTags.mockResolvedValue(['v1.2.3'])
+    git.changedFiles
+      .mockResolvedValueOnce(['vendor/x.txt'])
+      .mockResolvedValueOnce(['vendor/x.txt', 'version.txt'])
+
+    try {
+      await run()
+    } finally {
+      inputs['version-command'] = ''
+    }
+
+    expect(git.diffContains).toHaveBeenCalledWith(directory, '1.3.0', [
+      'version.txt'
+    ])
+    expect(git.commitFiles).toHaveBeenCalledWith(
+      directory,
+      'Release v1.3.0',
+      ['CHANGELOG.md', 'version.txt'],
+      author
+    )
+  })
+
+  it('fails when only a file from before the run is changed', async () => {
+    inputs['version-command'] = 'true'
+    github.context.payload.pull_request = mergedPullRequest({
+      labels: [{ name: 'minor' }]
+    })
+    git.listTags.mockResolvedValue(['v1.2.3'])
+    git.changedFiles.mockResolvedValue(['vendor/x.txt'])
+
+    try {
+      await run()
+    } finally {
+      inputs['version-command'] = ''
+    }
+
+    expect(git.diffContains).not.toHaveBeenCalled()
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'The version command did not write 1.3.0 into any file. Tag the current version before you adopt the action.'
+    )
+    expect(git.commitFiles).not.toHaveBeenCalled()
   })
 
   it('fails when the version command exits with an error', async () => {
@@ -222,7 +377,7 @@ describe('run', () => {
     expect(core.setFailed).toHaveBeenCalledWith(
       expect.stringContaining('exit code 3')
     )
-    expect(git.commitAll).not.toHaveBeenCalled()
+    expect(git.commitFiles).not.toHaveBeenCalled()
   })
 
   it('fails when the version command does not write the next version', async () => {
@@ -232,6 +387,9 @@ describe('run', () => {
     })
     git.listTags.mockResolvedValue(['v1.2.3'])
     git.diffContains.mockResolvedValue(false)
+    git.changedFiles
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce(['version.txt'])
 
     try {
       await run()
@@ -242,7 +400,7 @@ describe('run', () => {
     expect(core.setFailed).toHaveBeenCalledWith(
       'The version command did not write 1.3.0 into any file. Tag the current version before you adopt the action.'
     )
-    expect(git.commitAll).not.toHaveBeenCalled()
+    expect(git.commitFiles).not.toHaveBeenCalled()
   })
 
   it('fails when the push is rejected', async () => {

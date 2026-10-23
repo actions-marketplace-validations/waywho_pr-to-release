@@ -25,18 +25,28 @@ export const changedFiles = async (cwd) =>
     ).stdout
   )
 
-export const diffContains = async (cwd, text) => {
-  await git(cwd, ['add', '-A'])
+export const diffContains = async (cwd, text, paths) => {
+  await git(cwd, ['add', '--', ...paths])
   return lines(
-    (await git(cwd, ['diff', '--cached', 'HEAD', '-U0'])).stdout
+    (await git(cwd, ['diff', '--cached', 'HEAD', '-U0', '--', ...paths])).stdout
   ).some(
     (line) =>
       line.startsWith('+') && !line.startsWith('+++') && line.includes(text)
   )
 }
 
-export const commitAll = async (cwd, message, { name, email }) => {
-  await git(cwd, ['add', '-A'])
+export const tagContains = async (cwd, tagName, commit) => {
+  const { exitCode, stderr } = await git(
+    cwd,
+    ['merge-base', '--is-ancestor', commit, tagName],
+    { ignoreReturnCode: true }
+  )
+  if (exitCode > 1) throw new Error(`git merge-base failed: ${stderr.trim()}`)
+  return exitCode === 0
+}
+
+export const commitFiles = async (cwd, message, paths, { name, email }) => {
+  await git(cwd, ['add', '--', ...paths])
   await git(cwd, [
     '-c',
     `user.name=${name}`,
