@@ -15,37 +15,21 @@ on the pull request also releases a new version.
 ```mermaid
 flowchart TD
   open["Pull request opens or changes"]
-  labels{"Two or more release labels?"}
-  block["Fail check-labels and show a red check"]
+  check["check-labels: fail on two or more"]
   merged["Pull request merges"]
-  label{"How many release labels?"}
-  conflict["Fail before any change"]
-  entries["Read the entries from the description, or use the title"]
-  level{"Release label?"}
-  unreleased["Add the entries under Unreleased"]
-  commit["Commit 'Update the changelog for #N' and push"]
-  released{"Does the latest tag contain this pull request?"}
-  stop["Stop"]
-  bump["Compute the next version from the latest tag"]
-  command["Run version-command, if set"]
-  check{"Do the changed files contain the next version?"}
-  fail["Fail before any commit"]
-  section["Move Unreleased into a new section and update the links"]
-  push["Commit 'Release vX.Y.Z', tag and push"]
+  label{"Release label?"}
+  unreleased["Add entries to Unreleased and push"]
+  version["Run version-command"]
+  section["Cut the release section, tag and push"]
   release["Create the GitHub Release"]
 
-  open --> labels
-  labels -- yes --> block
-  labels -- no --> merged --> label
-  label -- "two or more" --> conflict
-  label -- "none or one" --> entries --> level
-  level -- none --> unreleased --> commit
-  level -- "major, minor or patch" --> released
-  released -- yes --> stop
-  released -- no --> bump --> command --> check
-  check -- no --> fail
-  check -- yes --> section --> push --> release
+  open --> check
+  merged --> label
+  label -- none --> unreleased
+  label -- "major, minor or patch" --> version --> section --> release
 ```
+
+[How it works](docs/how-it-works.md) shows every step.
 
 While a pull request is open, the `check-labels` job checks the labels. It fails
 if the pull request has two or more release labels. The action changes no file
