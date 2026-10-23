@@ -14,21 +14,40 @@ on the pull request also releases a new version.
 
 ```mermaid
 flowchart TD
-  merged["Pull request merges"] --> entries["Read the entries from the description, or use the title"]
-  entries --> label{"Release label?"}
-  label -- "two or more" --> conflict["Fail before any change"]
-  label -- none --> unreleased["Add the entries under Unreleased"]
-  unreleased --> commit["Commit 'Update the changelog for #N' and push"]
-  label -- "major, minor or patch" --> released{"Does the latest tag contain this pull request?"}
-  released -- yes --> stop["Stop"]
-  released -- no --> bump["Compute the next version from the latest tag"]
-  bump --> command["Run version-command, if set"]
-  command --> check{"Do the changed files contain the next version?"}
-  check -- no --> fail["Fail before any commit"]
-  check -- yes --> section["Move Unreleased into a new version section and update the links"]
-  section --> push["Commit 'Release vX.Y.Z', tag and push"]
-  push --> release["Create the GitHub Release"]
+  open["Pull request opens or changes"]
+  labels{"Two or more release labels?"}
+  block["Fail check-labels and block the merge"]
+  merged["Pull request merges"]
+  entries["Read the entries from the description, or use the title"]
+  label{"Release label?"}
+  conflict["Fail before any change"]
+  unreleased["Add the entries under Unreleased"]
+  commit["Commit 'Update the changelog for #N' and push"]
+  released{"Does the latest tag contain this pull request?"}
+  stop["Stop"]
+  bump["Compute the next version from the latest tag"]
+  command["Run version-command, if set"]
+  check{"Do the changed files contain the next version?"}
+  fail["Fail before any commit"]
+  section["Move Unreleased into a new section and update the links"]
+  push["Commit 'Release vX.Y.Z', tag and push"]
+  release["Create the GitHub Release"]
+
+  open --> labels
+  labels -- yes --> block
+  labels -- no --> merged --> entries --> label
+  label -- "two or more" --> conflict
+  label -- none --> unreleased --> commit
+  label -- "major, minor or patch" --> released
+  released -- yes --> stop
+  released -- no --> bump --> command --> check
+  check -- no --> fail
+  check -- yes --> section --> push --> release
 ```
+
+While a pull request is open, the `check-labels` job checks the labels. It fails
+if the pull request has two or more release labels. The action changes no file
+in this job.
 
 When a pull request merges, the action reads the description and the labels.
 
@@ -75,7 +94,7 @@ Changelog header.
 | No label | Adds the entries to `[Unreleased]`. No release. |
 
 - If a pull request has two or more release labels, the action fails. It changes
-  no file. Set one label before you merge.
+  no file. The `check-labels` job shows this before the merge.
 - You can change each label name with an input.
 
 ## How a description becomes entries
@@ -120,6 +139,9 @@ word of the title selects the section. Letter case does not matter.
 1. Copy [`examples/pull_request_template.md`](examples/pull_request_template.md)
    to `.github/pull_request_template.md`.
 1. Create the labels `major`, `minor` and `patch` in your repository.
+1. Make `check-labels` a required status check for the default branch. Use a
+   branch protection rule or a ruleset. GitHub then blocks a merge with two or
+   more release labels.
 1. If your project has a version file, set `version-command`. See the examples
    below.
 

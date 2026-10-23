@@ -94,6 +94,32 @@ describe('run', () => {
     expect(git.syncWithRemote).not.toHaveBeenCalled()
   })
 
+  it('fails an open pull request with two release labels', async () => {
+    github.context.payload.pull_request = mergedPullRequest({
+      merged: false,
+      labels: [{ name: 'minor' }, { name: 'patch' }]
+    })
+
+    await run()
+
+    expect(core.setFailed).toHaveBeenCalledWith(
+      'The pull request has more than one release label: minor, patch. Use one release label.'
+    )
+    expect(git.syncWithRemote).not.toHaveBeenCalled()
+  })
+
+  it('passes an open pull request with one release label', async () => {
+    github.context.payload.pull_request = mergedPullRequest({
+      merged: false,
+      labels: [{ name: 'minor' }]
+    })
+
+    await run()
+
+    expect(core.setFailed).not.toHaveBeenCalled()
+    expect(git.syncWithRemote).not.toHaveBeenCalled()
+  })
+
   it('does nothing when there is no pull request', async () => {
     github.context.payload = {}
 

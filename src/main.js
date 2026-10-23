@@ -22,6 +22,16 @@ export async function run() {
   try {
     const { payload } = github.context
     const pullRequest = payload.pull_request
+    const level =
+      pullRequest &&
+      releaseLevel(
+        pullRequest.labels.map((label) => label.name),
+        {
+          major: core.getInput('major-label'),
+          minor: core.getInput('minor-label'),
+          patch: core.getInput('patch-label')
+        }
+      )
     if (pullRequest?.merged !== true) {
       core.info('The pull request is not merged. Nothing to do.')
       core.setOutput('released', 'false')
@@ -38,14 +48,6 @@ export async function run() {
     const before = await changedFiles(cwd)
 
     const entries = entriesFor(pullRequest)
-    const level = releaseLevel(
-      pullRequest.labels.map((label) => label.name),
-      {
-        major: core.getInput('major-label'),
-        minor: core.getInput('minor-label'),
-        patch: core.getInput('patch-label')
-      }
-    )
     const changelogPath = core.getInput('changelog-path')
     const changelogFile = path.join(cwd, changelogPath)
     const original = fs.existsSync(changelogFile)

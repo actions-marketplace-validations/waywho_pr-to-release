@@ -62747,6 +62747,16 @@ async function run() {
   try {
     const { payload } = context;
     const pullRequest = payload.pull_request;
+    const level =
+      pullRequest &&
+      releaseLevel(
+        pullRequest.labels.map((label) => label.name),
+        {
+          major: getInput('major-label'),
+          minor: getInput('minor-label'),
+          patch: getInput('patch-label')
+        }
+      );
     if (pullRequest?.merged !== true) {
       info('The pull request is not merged. Nothing to do.');
       setOutput('released', 'false');
@@ -62763,14 +62773,6 @@ async function run() {
     const before = await changedFiles(cwd);
 
     const entries = entriesFor(pullRequest);
-    const level = releaseLevel(
-      pullRequest.labels.map((label) => label.name),
-      {
-        major: getInput('major-label'),
-        minor: getInput('minor-label'),
-        patch: getInput('patch-label')
-      }
-    );
     const changelogPath = getInput('changelog-path');
     const changelogFile = path$1.join(cwd, changelogPath);
     const original = fs$1.existsSync(changelogFile)
