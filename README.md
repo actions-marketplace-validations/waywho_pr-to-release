@@ -16,7 +16,7 @@ on the pull request also releases a new version.
 flowchart TD
   open["Pull request opens or changes"]
   labels{"Two or more release labels?"}
-  block["Fail check-labels and block the merge"]
+  block["Fail check-labels and show a red check"]
   merged["Pull request merges"]
   label{"How many release labels?"}
   conflict["Fail before any change"]
@@ -49,7 +49,8 @@ flowchart TD
 
 While a pull request is open, the `check-labels` job checks the labels. It fails
 if the pull request has two or more release labels. The action changes no file
-in this job.
+in this job. Fix the labels before you merge, because a merge with a label
+conflict adds no changelog entry.
 
 When a pull request merges, the action reads the description and the labels.
 
@@ -141,9 +142,6 @@ word of the title selects the section. Letter case does not matter.
 1. Copy [`examples/pull_request_template.md`](examples/pull_request_template.md)
    to `.github/pull_request_template.md`.
 1. Create the labels `major`, `minor` and `patch` in your repository.
-1. Make `check-labels` a required status check for the default branch. Use a
-   branch protection rule or a ruleset. GitHub then blocks a merge with two or
-   more release labels.
 1. If your project has a version file, set `version-command`. See the examples
    below.
 
@@ -207,7 +205,9 @@ npm:
 
 The default `GITHUB_TOKEN` has two limits:
 
-- It cannot push to a protected branch.
+- It cannot push to a protected branch. A rule that requires a status check,
+  such as `check-labels`, also blocks its push. GitHub does not let the
+  `GITHUB_TOKEN` bypass that rule.
 - A push with this token does not start other workflows. CI does not run on the
   release commit.
 
