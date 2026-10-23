@@ -84,6 +84,24 @@ test('diffContains is false when the text is absent', async () => {
   expect(await diffContains(work, '9.9.9')).toBe(false)
 })
 
+test('diffContains is true when a new untracked file has the text', async () => {
+  fs.writeFileSync(path.join(work, 'new-version.txt'), '0.2.0\n')
+
+  expect(await diffContains(work, '0.2.0')).toBe(true)
+})
+
+test('a rejected push leaves no tag on the remote', async () => {
+  const other = cloneRemote('other')
+  commitFile(other, 'other.txt', 'hello\n', 'From other')
+  git(other, 'push', 'origin', 'main')
+  fs.writeFileSync(path.join(work, 'CHANGELOG.md'), '# Changelog\n')
+  await commitAll(work, 'Release 0.2.0', author)
+  await tag(work, 'v0.2.0')
+
+  await expect(push(work, 'main', 'v0.2.0')).rejects.toThrow(/^Push rejected:/)
+  expect(git(remote, 'tag', '--list')).toBe('')
+})
+
 test('diffContains ignores removed lines', async () => {
   fs.writeFileSync(path.join(work, 'version.rb'), "VERSION = '0.2.0'\n")
 

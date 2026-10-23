@@ -25,11 +25,15 @@ export const changedFiles = async (cwd) =>
     ).stdout
   )
 
-export const diffContains = async (cwd, text) =>
-  lines((await git(cwd, ['diff', 'HEAD', '-U0'])).stdout).some(
+export const diffContains = async (cwd, text) => {
+  await git(cwd, ['add', '-A'])
+  return lines(
+    (await git(cwd, ['diff', '--cached', 'HEAD', '-U0'])).stdout
+  ).some(
     (line) =>
       line.startsWith('+') && !line.startsWith('+++') && line.includes(text)
   )
+}
 
 export const commitAll = async (cwd, message, { name, email }) => {
   await git(cwd, ['add', '-A'])
@@ -49,9 +53,9 @@ export const tag = async (cwd, name) => {
 }
 
 export const push = async (cwd, branch, tagName) => {
-  const refs = tagName ? [branch, tagName] : [branch]
-  const { exitCode, stderr } = await git(cwd, ['push', 'origin', ...refs], {
-    ignoreReturnCode: true
-  })
+  const args = tagName
+    ? ['push', '--atomic', 'origin', branch, tagName]
+    : ['push', 'origin', branch]
+  const { exitCode, stderr } = await git(cwd, args, { ignoreReturnCode: true })
   if (exitCode !== 0) throw new Error(`Push rejected: ${stderr.trim()}`)
 }
