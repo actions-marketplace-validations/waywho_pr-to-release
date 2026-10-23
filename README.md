@@ -1,4 +1,4 @@
-# Create a GitHub Action Using JavaScript
+# PR to Release
 
 [![GitHub Super-Linter](https://github.com/actions/javascript-action/actions/workflows/linter.yml/badge.svg)](https://github.com/actions/javascript-action/actions/workflows/linter.yml)
 [![CI](https://github.com/actions/javascript-action/actions/workflows/ci.yml/badge.svg)](https://github.com/actions/javascript-action/actions/workflows/ci.yml)

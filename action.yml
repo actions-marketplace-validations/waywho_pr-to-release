@@ -1,23 +1,56 @@
-name: The name of your action here
-description: Provide a description here
-author: Your name or organization here
+name: PR to Release
+description:
+  Writes merged pull request descriptions into a Keep a Changelog CHANGELOG.md.
+  A release label bumps the version, tags it and creates a GitHub Release.
+author: WeiHsi Hu
 
-# Add your action's branding here. This will appear on the GitHub Marketplace.
 branding:
-  icon: heart
-  color: red
+  icon: tag
+  color: blue
 
-# Define your inputs here.
 inputs:
-  milliseconds:
-    description: Your input description here
-    required: true
-    default: '1000'
+  github-token:
+    description: The token that reads pull requests and creates releases.
+    default: ${{ github.token }}
+  changelog-path:
+    description: The path of the changelog file.
+    default: CHANGELOG.md
+  version-command:
+    description:
+      An optional shell command that the action runs when it creates a release.
+      Leave it empty to run no command.
+    default: ''
+  tag-prefix:
+    description: The text that starts every release tag.
+    default: v
+  major-label:
+    description: The pull request label that releases a major version.
+    default: major
+  minor-label:
+    description: The pull request label that releases a minor version.
+    default: minor
+  patch-label:
+    description: The pull request label that releases a patch version.
+    default: patch
+  skip-label:
+    description: The pull request label that skips the changelog entry.
+    default: skip-release
+  commit-user-name:
+    description: The author name for the changelog commit.
+    default: github-actions[bot]
+  commit-user-email:
+    description: The author email for the changelog commit.
+    default: 41898282+github-actions[bot]@users.noreply.github.com
 
-# Define your outputs here.
 outputs:
-  time:
-    description: Your output description here
+  released:
+    description: Is true when the action created a release.
+  version:
+    description: The version of the release.
+  tag:
+    description: The tag of the release.
+  release-url:
+    description: The URL of the GitHub Release.
 
 runs:
   using: node24
