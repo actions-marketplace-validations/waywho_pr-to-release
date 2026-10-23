@@ -24,16 +24,25 @@ With a release label:
 
 1. The action finds the current version. This is the highest tag
    `<prefix>X.Y.Z`. It is `0.0.0` if no tag exists.
+1. The action stops if the current tag already contains the merge commit of the
+   pull request. A re-run of a released pull request does nothing.
 1. The action runs `version-command`, if you set it.
-1. The action checks that the changed files contain the next version. If not, it
-   stops before any commit.
+1. If you set `version-command`, the action checks that the files it changed
+   contain the next version. If not, the action stops before any commit.
 1. The action moves `[Unreleased]` and the entries of the pull request into
    `## [<next>] - <YYYY-MM-DD>`. The date is in UTC.
 1. The action updates the comparison links at the bottom of the file.
-1. The action commits `Release v<next>`, creates the tag and pushes.
+1. The action commits `Release <tag>`, creates the tag and pushes. For example,
+   `Release v1.3.0`.
 1. The action creates a GitHub Release. The body is the new changelog section.
 
 A rejected push fails the action. The action then creates no release.
+
+If the push succeeds but the GitHub Release fails, the action fails. Create the
+GitHub Release for that tag by hand. A re-run does not create it.
+
+The action commits only the changelog and the files that `version-command`
+changed. It does not commit other files in the workspace.
 
 If `CHANGELOG.md` does not exist, the action creates it with the Keep a
 Changelog header.
@@ -81,10 +90,11 @@ word of the title selects the section. Letter case does not matter.
 ## Setup
 
 1. Tag the current version once. This makes the tag and the version file agree.
+   For example, if your version is 1.4.2, run these commands:
 
    ```bash
-   git tag v0.1.0
-   git push origin v0.1.0
+   git tag v1.4.2
+   git push origin v1.4.2
    ```
 
 1. Copy [`examples/pr-to-release.yml`](examples/pr-to-release.yml) to
@@ -130,7 +140,9 @@ command receives these environment variables:
 - `CURRENT_VERSION` is the version of the highest tag.
 
 A non-zero exit code stops the action. The files that the command changes must
-contain `NEXT_VERSION`. If they do not, the action stops before any commit.
+contain `NEXT_VERSION`. If they do not, the action stops before any commit. The
+action commits these files with the changelog. It ignores files that were
+already new or changed before the command ran, such as `vendor/bundle`.
 
 Ruby, with the `bump` gem:
 
