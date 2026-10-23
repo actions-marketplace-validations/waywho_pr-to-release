@@ -12,6 +12,24 @@ on the pull request also releases a new version.
 
 ## What it does
 
+```mermaid
+flowchart TD
+  merged["Pull request merges"] --> entries["Read the entries from the description, or use the title"]
+  entries --> label{"Release label?"}
+  label -- "two or more" --> conflict["Fail before any change"]
+  label -- none --> unreleased["Add the entries under Unreleased"]
+  unreleased --> commit["Commit 'Update the changelog for #N' and push"]
+  label -- "major, minor or patch" --> released{"Does the latest tag contain this pull request?"}
+  released -- yes --> stop["Stop"]
+  released -- no --> bump["Compute the next version from the latest tag"]
+  bump --> command["Run version-command, if set"]
+  command --> check{"Do the changed files contain the next version?"}
+  check -- no --> fail["Fail before any commit"]
+  check -- yes --> section["Move Unreleased into a new version section and update the links"]
+  section --> push["Commit 'Release vX.Y.Z', tag and push"]
+  push --> release["Create the GitHub Release"]
+```
+
 When a pull request merges, the action reads the description and the labels.
 
 Without a release label:
@@ -49,16 +67,15 @@ Changelog header.
 
 ## Labels
 
-| Label          | Effect                                          |
-| -------------- | ----------------------------------------------- |
-| `major`        | Releases the next major version right away.     |
-| `minor`        | Releases the next minor version right away.     |
-| `patch`        | Releases the next patch version right away.     |
-| `skip-release` | Adds the entries to `[Unreleased]`. No release. |
-| No label       | Adds the entries to `[Unreleased]`. No release. |
+| Label    | Effect                                          |
+| -------- | ----------------------------------------------- |
+| `major`  | Releases the next major version right away.     |
+| `minor`  | Releases the next minor version right away.     |
+| `patch`  | Releases the next patch version right away.     |
+| No label | Adds the entries to `[Unreleased]`. No release. |
 
-- If a pull request has several release labels, the highest one wins.
-- `skip-release` wins over a release label.
+- If a pull request has two or more release labels, the action fails. It changes
+  no file. Set one label before you merge.
 - You can change each label name with an input.
 
 ## How a description becomes entries
@@ -102,25 +119,23 @@ word of the title selects the section. Letter case does not matter.
    `.github/workflows/pr-to-release.yml`.
 1. Copy [`examples/pull_request_template.md`](examples/pull_request_template.md)
    to `.github/pull_request_template.md`.
-1. Create the labels `major`, `minor`, `patch` and `skip-release` in your
-   repository.
+1. Create the labels `major`, `minor` and `patch` in your repository.
 1. If your project has a version file, set `version-command`. See the examples
    below.
 
 ## Inputs
 
-| Input               | Default                                                 | Description                                                                  |
-| ------------------- | ------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `github-token`      | `${{ github.token }}`                                   | The token that reads pull requests and creates releases.                     |
-| `changelog-path`    | `CHANGELOG.md`                                          | The path of the changelog file.                                              |
-| `version-command`   | empty                                                   | A command that the action runs with `bash -c` before the release commit.     |
-| `tag-prefix`        | `v`                                                     | The text that starts every release tag.                                      |
-| `major-label`       | `major`                                                 | The pull request label that releases a major version.                        |
-| `minor-label`       | `minor`                                                 | The pull request label that releases a minor version.                        |
-| `patch-label`       | `patch`                                                 | The pull request label that releases a patch version.                        |
-| `skip-label`        | `skip-release`                                          | The pull request label that stops a release. The entries stay in Unreleased. |
-| `commit-user-name`  | `github-actions[bot]`                                   | The author name for the changelog commit.                                    |
-| `commit-user-email` | `41898282+github-actions[bot]@users.noreply.github.com` | The author email for the changelog commit.                                   |
+| Input               | Default                                                 | Description                                                              |
+| ------------------- | ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `github-token`      | `${{ github.token }}`                                   | The token that reads pull requests and creates releases.                 |
+| `changelog-path`    | `CHANGELOG.md`                                          | The path of the changelog file.                                          |
+| `version-command`   | empty                                                   | A command that the action runs with `bash -c` before the release commit. |
+| `tag-prefix`        | `v`                                                     | The text that starts every release tag.                                  |
+| `major-label`       | `major`                                                 | The pull request label that releases a major version.                    |
+| `minor-label`       | `minor`                                                 | The pull request label that releases a minor version.                    |
+| `patch-label`       | `patch`                                                 | The pull request label that releases a patch version.                    |
+| `commit-user-name`  | `github-actions[bot]`                                   | The author name for the changelog commit.                                |
+| `commit-user-email` | `41898282+github-actions[bot]@users.noreply.github.com` | The author email for the changelog commit.                               |
 
 ## Outputs
 
