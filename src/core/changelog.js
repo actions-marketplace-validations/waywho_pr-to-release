@@ -69,3 +69,36 @@ export const addUnreleased = (text, entries) => {
   if (end < text.length && lines.at(-1) !== '') lines.push('')
   return `${text.slice(0, bodyStart)}${lines.join('\n')}\n${text.slice(end)}`
 }
+
+const LINK_LINE = /^\[[^\]]+\]: /
+
+export const cutRelease = (
+  text,
+  { entries, version, previousVersion, date, repoUrl, tagPrefix }
+) => {
+  const filled = addUnreleased(text, entries)
+  const { bodyStart, end } = locateUnreleased(filled)
+  const notes = filled.slice(bodyStart, end).trimEnd()
+  const rest = filled.slice(end)
+  const section = `## [${version}] - ${date}\n${notes ? `${notes}\n` : ''}`
+  const released = `${filled.slice(0, bodyStart)}\n${section}${rest ? `\n${rest}` : ''}`
+
+  const lines = released.trimEnd().split('\n')
+  let linksStart = lines.length
+  while (linksStart > 0 && LINK_LINE.test(lines[linksStart - 1])) linksStart--
+  const olderLinks = lines
+    .slice(linksStart)
+    .filter((line) => !line.startsWith('[Unreleased]: '))
+  const tag = `${tagPrefix}${version}`
+  const versionUrl =
+    previousVersion === '0.0.0'
+      ? `${repoUrl}/releases/tag/${tag}`
+      : `${repoUrl}/compare/${tagPrefix}${previousVersion}...${tag}`
+  const links = [
+    `[Unreleased]: ${repoUrl}/compare/${tag}...HEAD`,
+    `[${version}]: ${versionUrl}`,
+    ...olderLinks
+  ]
+  const content = lines.slice(0, linksStart).join('\n').trimEnd()
+  return { text: `${content}\n\n${links.join('\n')}\n`, notes }
+}
