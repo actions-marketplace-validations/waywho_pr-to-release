@@ -1,6 +1,6 @@
 # How it works
 
-This diagram shows every step of the action. The [README](../README.md) gives
+This diagram shows every step of the action. The [Readme](../README.md) gives
 the short version.
 
 ```mermaid
