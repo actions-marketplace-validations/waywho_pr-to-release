@@ -1,6 +1,6 @@
 {
   "name": "pr-to-release",
-  "description": "Writes merged pull request descriptions into a Keep a Changelog CHANGELOG.md. A release label bumps the version, tags it and creates a GitHub Release.",
+  "description": "Adds merged pull requests to a Keep a Changelog CHANGELOG.md. A release label also bumps the version, tags and releases.",
   "version": "0.0.0",
   "author": "WeiHsi Hu",
   "type": "module",

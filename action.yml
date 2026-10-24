@@ -1,7 +1,7 @@
 name: PR to Release - Changelog and Release in one workflow
 description:
-  Writes merged pull request descriptions into a Keep a Changelog CHANGELOG.md.
-  A release label bumps the version, tags it and creates a GitHub Release.
+  Adds merged pull requests to a Keep a Changelog CHANGELOG.md. A release label
+  also bumps the version, tags and releases.
 author: WeiHsi Hu
 
 branding:
